@@ -1,63 +1,98 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <title>Live Sheet Data</title>
+  <title>Brand Price Lists</title>
   <style>
-    body { font-family: Arial, sans-serif; max-width: 1000px; margin: 0 auto; }
+    body { font-family: Arial, sans-serif; max-width: 1200px; margin: 0 auto; padding: 20px; }
+    .brand-selector { margin: 20px 0; padding: 10px; font-size: 16px; }
     table { border-collapse: collapse; width: 100%; margin-top: 20px; }
-    th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
-    th { background-color: #f2f2f2; }
+    th, td { border: 1px solid #ddd; padding: 10px; text-align: left; }
+    th { background-color: #f2f2f2; position: sticky; top: 0; }
     .loading:after { content: ' ...'; animation: dots 1s infinite; }
-    @keyframes dots { 
-      0%, 20% { content: '.'; } 
-      40% { content: '..'; } 
-      60% { content: '...'; } 
-    }
+    @keyframes dots { 0%, 20% { content: '.'; } 40% { content: '..'; } 60% { content: '...'; } }
+    .current-brand { font-weight: bold; margin: 10px 0; color: #1a73e8; }
   </style>
 </head>
 <body>
-  <h1>Live Sheet Data <span id="status"></span></h1>
-  <button onclick="loadData()">Refresh Data</button>
+  <h1>Brand Price Lists</h1>
+  
+  <div>
+    <label for="brandSelect">Select Brand: </label>
+    <select id="brandSelect" class="brand-selector">
+      <option value="">-- Select a brand --</option>
+      <option value="Sheet1">Nike</option>
+      <option value="Sheet2">Adidas</option>
+      <option value="Sheet3">Puma</option>
+      <!-- Add more brands as needed -->
+    </select>
+    <div id="currentBrand" class="current-brand"></div>
+  </div>
+  
   <div id="tableContainer"></div>
+  <div id="status"></div>
 
   <script>
-    // This global function will receive the data
+    // Configuration
+    const SCRIPT_URL = 'YOUR_GOOGLE_SCRIPT_URL';
+    let currentData = null;
+    
+    // Global function for JSONP callback
     function updateTable(response) {
       const container = document.getElementById('tableContainer');
-      let html = '<table>';
+      const status = document.getElementById('status');
       
-      // Create headers from first row
-      if (response.data.length > 0) {
-        html += '<tr>';
-        response.data[0].forEach(header => {
-          html += `<th>${header}</th>`;
-        });
-        html += '</tr>';
-        
-        // Create data rows (skip header if needed)
-        const startRow = response.data.length > 1 ? 1 : 0;
-        for (let i = startRow; i < response.data.length; i++) {
-          html += '<tr>';
-          response.data[i].forEach(cell => {
-            html += `<td>${cell || ''}</td>`;
-          });
-          html += '</tr>';
-        }
+      if (!response.data || response.data.length === 0) {
+        container.innerHTML = '<p>No data available for this brand</p>';
+        status.textContent = '';
+        return;
       }
       
-      html += '</table>';
+      currentData = response.data;
+      const brandName = response.sheetName;
+      
+      document.getElementById('currentBrand').textContent = `Current: ${brandName}`;
+      status.className = '';
+      status.textContent = `Last updated: ${new Date().toLocaleTimeString()}`;
+      
+      // Generate table HTML
+      let html = '<table><thead><tr>';
+      
+      // Create headers from first row
+      response.data[0].forEach(header => {
+        html += `<th>${header}</th>`;
+      });
+      html += '</tr></thead><tbody>';
+      
+      // Create data rows (skip header if needed)
+      const startRow = response.data.length > 1 ? 1 : 0;
+      for (let i = startRow; i < response.data.length; i++) {
+        html += '<tr>';
+        response.data[i].forEach(cell => {
+          html += `<td>${cell || ''}</td>`;
+        });
+        html += '</tr>';
+      }
+      
+      html += '</tbody></table>';
       container.innerHTML = html;
-      document.getElementById('status').textContent = `Last updated: ${new Date(response.lastUpdated).toLocaleString()}`;
     }
-
-    function loadData() {
+    
+    // Error handling function
+    function showError(message) {
+      document.getElementById('tableContainer').innerHTML = 
+        `<div class="error">${message}</div>`;
+      document.getElementById('status').textContent = '';
+    }
+    
+    // Load data for selected brand
+    function loadBrandData(sheetName) {
       const status = document.getElementById('status');
       status.className = 'loading';
       status.textContent = 'Loading';
       
-      // Create script tag to fetch data via JSONP
+      // Create script tag for JSONP request
       const script = document.createElement('script');
-      script.src = 'https://script.google.com/macros/s/AKfycbydB_q-qQTW8oOMO0kJy74dk9BOxarm-vUdQ3BU58Mj3_rf3IKsifYsmAYC1IIQNhLb/exec?callback=updateTable&cachebuster=' + Date.now();
+      script.src = `${SCRIPT_URL}?callback=updateTable&sheet=${encodeURIComponent(sheetName)}&cachebuster=${Date.now()}`;
       
       // Clean up previous script tags
       document.querySelectorAll('script[data-jsonp]').forEach(el => el.remove());
@@ -65,12 +100,21 @@
       
       document.body.appendChild(script);
     }
-
-    // Load data on page load
-    window.onload = loadData;
     
-    // Optional: Auto-refresh every 30 seconds
-    setInterval(loadData, 30000);
+    // Initialize brand selector
+    document.getElementById('brandSelect').addEventListener('change', function() {
+      const selectedBrand = this.value;
+      if (selectedBrand) {
+        loadBrandData(selectedBrand);
+      } else {
+        document.getElementById('tableContainer').innerHTML = '';
+        document.getElementById('currentBrand').textContent = '';
+      }
+    });
+    
+    // Optional: Load first brand by default
+    // document.getElementById('brandSelect').value = 'Nike';
+    // document.getElementById('brandSelect').dispatchEvent(new Event('change'));
   </script>
 </body>
 </html>
